@@ -31,6 +31,8 @@
 
 #define GRUB_MMAP_REGISTER_BY_FIRMWARE  1
 
+#define GRUB_EFI_DL_ALIGN		GRUB_EFI_PAGE_SIZE
+
 grub_err_t grub_machine_mmap_register (grub_uint64_t start, grub_uint64_t size,
 				       int type, int handle);
 grub_err_t grub_machine_mmap_unregister (int handle);

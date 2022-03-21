@@ -24,6 +24,7 @@
 #include <grub/mm.h>
 #include <grub/i18n.h>
 #include <grub/arm/reloc.h>
+#include <grub/efi/memory.h>
 
 struct trampoline_arm
 {
@@ -277,4 +278,17 @@ grub_arch_dl_check_header (void *ehdr)
 		       N_("invalid arch-dependent ELF magic"));
 
   return GRUB_ERR_NONE;
+}
+
+/*
+ * Tell the loader what our minimum section alignment is.
+ */
+grub_size_t
+grub_arch_dl_min_alignment (void)
+{
+#ifdef GRUB_MACHINE_EFI
+  return GRUB_EFI_DL_ALIGN;
+#else
+  return GRUB_DEFAULT_DL_ALIGN;
+#endif
 }

@@ -23,6 +23,7 @@
 #include <grub/misc.h>
 #include <grub/emu/misc.h>
 #include <grub/disk.h>
+#include <grub/efi/memory.h>
 
 const int grub_no_modules = 1;
 
@@ -67,3 +68,16 @@ grub_arch_dl_init_linker (void)
 }
 #endif
 
+
+/*
+ * Tell the loader what our minimum section alignment is.
+ */
+grub_size_t
+grub_arch_dl_min_alignment (void)
+{
+ #ifdef GRUB_MACHINE_EFI
+  return GRUB_EFI_DL_ALIGN;
+ #else
+  return GRUB_DEFAULT_DL_ALIGN;
+ #endif
+}

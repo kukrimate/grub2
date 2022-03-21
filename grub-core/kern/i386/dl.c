@@ -22,6 +22,7 @@
 #include <grub/misc.h>
 #include <grub/err.h>
 #include <grub/i18n.h>
+#include <grub/efi/memory.h>
 
 /* Check if EHDR is a valid ELF header.  */
 grub_err_t
@@ -78,4 +79,17 @@ grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
     }
 
   return GRUB_ERR_NONE;
+}
+
+/*
+ * Tell the loader what our minimum section alignment is.
+ */
+grub_size_t
+grub_arch_dl_min_alignment (void)
+{
+#ifdef GRUB_MACHINE_EFI
+  return GRUB_EFI_DL_ALIGN;
+#else
+  return GRUB_DEFAULT_DL_ALIGN;
+#endif
 }

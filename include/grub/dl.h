@@ -264,6 +264,8 @@ grub_err_t grub_arch_dl_check_header (void *ehdr);
 grub_err_t
 grub_arch_dl_relocate_symbols (grub_dl_t mod, void *ehdr,
 			       Elf_Shdr *s, grub_dl_segment_t seg);
+grub_size_t
+grub_arch_dl_min_alignment (void);
 #endif
 
 #if defined (_mips)
@@ -307,5 +309,7 @@ grub_arch_dl_get_tramp_got_size (const void *ehdr, grub_size_t *tramp,
 #endif
 
 #endif
+
+#define GRUB_DEFAULT_DL_ALIGN 1
 
 #endif /* ! GRUB_DL_H */
