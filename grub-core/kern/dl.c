@@ -615,24 +615,96 @@ grub_dl_relocate_symbols (grub_dl_t mod, void *ehdr)
 	grub_dl_segment_t seg;
 	grub_err_t err;
 
-	/* Find the target segment.  */
-	for (seg = mod->segment; seg; seg = seg->next)
-	  if (seg->section == s->sh_info)
-	    break;
+	seg = grub_dl_find_segment(mod, s->sh_info);
+        if (!seg)
+	  continue;
 
-	if (seg)
-	  {
-	    if (!mod->symtab)
-	      return grub_error (GRUB_ERR_BAD_MODULE, "relocation without symbol table");
+	if (!mod->symtab)
+	  return grub_error (GRUB_ERR_BAD_MODULE, "relocation without symbol table");
 
-	    err = grub_arch_dl_relocate_symbols (mod, ehdr, s, seg);
-	    if (err)
-	      return err;
-	  }
+	err = grub_arch_dl_relocate_symbols (mod, ehdr, s, seg);
+	if (err)
+	  return err;
       }
 
   return GRUB_ERR_NONE;
 }
+
+/* Only define this on EFI to save space in core */
+#ifdef GRUB_MACHINE_EFI
+static grub_err_t
+grub_dl_set_mem_attrs (grub_dl_t mod, void *ehdr)
+{
+  unsigned i;
+  const Elf_Shdr *s;
+  const Elf_Ehdr *e = ehdr;
+  grub_err_t err;
+#if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv)
+  grub_size_t arch_addralign = grub_arch_dl_min_alignment ();
+  grub_addr_t tgaddr;
+  grub_size_t tgsz;
+#endif
+
+  for (i = 0, s = (const Elf_Shdr *)((const char *) e + e->e_shoff);
+       i < e->e_shnum;
+       i++, s = (const Elf_Shdr *)((const char *) s + e->e_shentsize))
+    {
+      grub_dl_segment_t seg;
+      grub_uint64_t set_attrs = GRUB_MEM_ATTR_R;
+      grub_uint64_t clear_attrs = GRUB_MEM_ATTR_W|GRUB_MEM_ATTR_X;
+
+      seg = grub_dl_find_segment(mod, i);
+      if (!seg)
+	continue;
+
+      if (seg->size == 0 || !(s->sh_flags & SHF_ALLOC))
+	continue;
+
+      if (s->sh_flags & SHF_WRITE)
+	{
+	  set_attrs |= GRUB_MEM_ATTR_W;
+	  clear_attrs &= ~GRUB_MEM_ATTR_W;
+	}
+
+      if (s->sh_flags & SHF_EXECINSTR)
+	{
+	  set_attrs |= GRUB_MEM_ATTR_X;
+	  clear_attrs &= ~GRUB_MEM_ATTR_X;
+	}
+
+      err = grub_update_mem_attrs ((grub_addr_t)(seg->addr), seg->size,
+				   set_attrs, clear_attrs);
+      if (err != GRUB_ERR_NONE)
+	return err;
+    }
+
+#if !defined (__i386__) && !defined (__x86_64__) && !defined(__riscv)
+  tgaddr = grub_min((grub_addr_t)mod->tramp, (grub_addr_t)mod->got);
+  tgsz = grub_max((grub_addr_t)mod->trampptr, (grub_addr_t)mod->gotptr) - tgaddr;
+
+  if (tgsz)
+    {
+      tgsz = ALIGN_UP(tgsz, arch_addralign);
+
+      if (tgaddr < (grub_addr_t)mod->base ||
+          tgsz > (grub_addr_t)-1 - tgaddr ||
+	  tgaddr + tgsz > (grub_addr_t)mod->base + mod->sz)
+	return grub_error (GRUB_ERR_BUG,
+			   "BUG: trying to protect pages outside of module "
+			   "allocation (\"%s\"): module base %p, size 0x%"
+			   PRIxGRUB_SIZE "; tramp/GOT base 0x%" PRIxGRUB_ADDR
+			   ", size 0x%" PRIxGRUB_SIZE,
+			   mod->name, mod->base, mod->sz, tgaddr, tgsz);
+      err = grub_update_mem_attrs (tgaddr, tgsz, GRUB_MEM_ATTR_R|GRUB_MEM_ATTR_X,
+				   GRUB_MEM_ATTR_W);
+      if (err != GRUB_ERR_NONE)
+	return err;
+    }
+#endif
+
+  return GRUB_ERR_NONE;
+}
+#endif
 
 /* Load a module from core memory.  */
 grub_dl_t
@@ -667,6 +739,7 @@ grub_dl_load_core_noinit (void *addr, grub_size_t size)
   mod->ref_count = 1;
 
   grub_dprintf ("modules", "relocating to %p\n", mod);
+
   /* Me, Vladimir Serbinenko, hereby I add this module check as per new
      GNU module policy. Note that this license check is informative only.
      Modules have to be licensed under GPLv3 or GPLv3+ (optionally
@@ -680,7 +753,12 @@ grub_dl_load_core_noinit (void *addr, grub_size_t size)
       || grub_dl_resolve_dependencies (mod, e)
       || grub_dl_load_segments (mod, e)
       || grub_dl_resolve_symbols (mod, e)
-      || grub_dl_relocate_symbols (mod, e))
+      || grub_dl_relocate_symbols (mod, e)
+#ifdef GRUB_MACHINE_EFI
+      || grub_dl_set_mem_attrs (mod, e))
+#else
+      )
+#endif
     {
       mod->fini = 0;
       grub_dl_unload (mod);
