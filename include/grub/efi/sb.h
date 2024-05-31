@@ -33,6 +33,8 @@ EXPORT_FUNC (grub_efi_get_secureboot) (void);
 
 extern void
 grub_shim_lock_verifier_setup (void);
+extern int
+EXPORT_FUNC (grub_efi_check_nx_required) (void);
 #else
 static inline grub_uint8_t
 grub_efi_get_secureboot (void)

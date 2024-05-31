@@ -225,3 +225,31 @@ grub_shim_lock_verifier_setup (void)
   grub_env_set ("shim_lock", "y");
   grub_env_export ("shim_lock");
 }
+
+int
+grub_efi_check_nx_required (void)
+{
+  int nx_required = 1; /* assume required, unless we can prove otherwise */
+  grub_efi_status_t status;
+  grub_size_t mok_policy_sz = 0;
+  char *mok_policy = NULL;
+  grub_uint32_t mok_policy_attrs = 0;
+
+  status = grub_efi_get_variable_with_attributes ("MokPolicy",
+						  &(grub_guid_t) GRUB_EFI_SHIM_LOCK_GUID,
+						  &mok_policy_sz,
+						  (void **)&mok_policy,
+						  &mok_policy_attrs);
+  if (status != GRUB_EFI_SUCCESS ||
+      mok_policy_sz != 1 ||
+      mok_policy == NULL ||
+      mok_policy_attrs != GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS)
+    goto out;
+
+  nx_required = !!(mok_policy[0] & GRUB_MOK_POLICY_NX_REQUIRED);
+
+ out:
+  grub_free (mok_policy);
+
+  return nx_required;
+}
